@@ -11,7 +11,7 @@ Atividade prática de computação gráfica — cena 3D interativa utilizando **
 | **Nome** | Vintage Radio |
 | **Autor** | Sketchfab Community |
 | **Licença** | CC Attribution (CC BY 4.0) |
-| **Link** | [https://sketchfab.com/3d-models/vintage-radio-ffe54f9374ae4a8c9b0e5d39c0ddbbb5](https://sketchfab.com/3d-models/veiculo-explorer-7c797ab552f14393859e9ab89d798dd9) |
+| **Link** | (https://sketchfab.com/3d-models/veiculo-explorer-7c797ab552f14393859e9ab89d798dd9) |
 | **Formato** | glTF / GLB |
 
 > ⚠️ O modelo **não está incluído** no repositório por questões de tamanho de arquivo.  
