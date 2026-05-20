@@ -8,50 +8,50 @@ Atividade prática de computação gráfica — cena 3D interativa utilizando **
 
 | Campo | Dados |
 |-------|-------|
-| **Nome** | Vintage Radio |
-| **Autor** | Sketchfab Community |
+| **Nome** | veículo_explorer |
+| **Autor** | Leandro.Gomes |
 | **Licença** | CC Attribution (CC BY 4.0) |
-| **Link** | (https://sketchfab.com/3d-models/veiculo-explorer-7c797ab552f14393859e9ab89d798dd9) |
-| **Formato** | glTF / GLB |
+| **Link** | https://sketchfab.com/3d-models/veiculo-explorer-7c797ab552f14393859e9ab89d798dd9 |
+| **Formato** | GLB |
+| **Triângulos** | 15.2k |
 
-> ⚠️ O modelo **não está incluído** no repositório por questões de tamanho de arquivo.  
-> Siga as instruções abaixo para configurar o projeto localmente.
+O arquivo `scene.glb` já está incluído na pasta `models/` deste repositório — não é necessário baixar nada.
 
 ---
 
 ## 🚀 Como executar
 
-### 1. Baixar o modelo do Sketchfab
-
-1. Acesse o link do modelo acima
-2. Clique em **Download 3D Model**
-3. Selecione o formato **GLB** (preferível) ou **glTF**
-4. Coloque o arquivo `scene.glb` (ou renomeie para `scene.glb`) dentro da pasta `models/`
-
-### 2. Servir localmente (obrigatório — CORS)
+Como o modelo já está no repositório, basta clonar e subir um servidor local:
 
 ```bash
-# Opção A — npx serve (recomendado)
+git clone https://github.com/Lucas-Patricio/cena-3d-interativa.git
+cd cena-3d-interativa
 npx serve .
-
-# Opção B — Python 3
-python3 -m http.server 8080
-
-# Opção C — Node.js http-server
-npx http-server .
 ```
 
-Acesse `http://localhost:3000` (ou a porta exibida no terminal).
+Acesse `http://localhost:3000` no navegador.
+
+> **Por que não funciona com duplo clique no index.html?**
+> O GLTFLoader faz requisições HTTP para carregar o modelo. Navegadores bloqueiam requisições `file://` por segurança — um servidor HTTP resolve isso.
+
+Alternativas ao `npx serve`:
+```bash
+# Python 3
+python3 -m http.server 8080
+
+# Node http-server
+npx http-server .
+```
 
 ---
 
 ## 🗂️ Estrutura do projeto
 
 ```
-threejs-sketchfab/
+cena-3d-interativa/
 ├── index.html        # Cena Three.js completa
-├── models/           # Coloque aqui o scene.glb baixado do Sketchfab
-│   └── scene.glb     # ← arquivo a ser adicionado manualmente
+├── models/
+│   └── scene.glb     # Modelo 3D (veículo_explorer por Leandro.Gomes)
 └── README.md
 ```
 
@@ -76,12 +76,12 @@ O modelo é posicionado sobre uma estrada de asfalto com:
 
 - **Chão** de grama e asfalto com acostamento de terra
 - **Faixas tracejadas** amarelas no centro da pista
-- **24 árvores procedurais** (tronco + três cones de copa) distribuídas dos dois lados
+- **24 árvores procedurais** distribuídas dos dois lados
 - **Névoa exponencial** (`FogExp2`) que dissolve as árvores ao fundo
 - **Céu azul de dia** como background da cena
 - **Sol** (`DirectionalLight`) posicionado alto com sombras suaves na estrada
 - **HemisphereLight** simulando luz do céu (azul) + reflexo do chão verde
-- **EnvMap** gerado via `PMREMGenerator` com cores de dia — reflexo do céu e da floresta aparece na lataria do modelo
+- **EnvMap** via `PMREMGenerator` — reflexo do céu e da floresta na lataria do veículo
 
 ---
 
@@ -119,5 +119,5 @@ O modelo é posicionado sobre uma estrada de asfalto com:
 
 ## 📄 Licença
 
-Código-fonte: MIT  
-Modelo 3D: CC Attribution — veja link do Sketchfab acima
+Código-fonte: MIT
+Modelo 3D: CC Attribution — [veículo_explorer por Leandro.Gomes](https://sketchfab.com/3d-models/veiculo-explorer-7c797ab552f14393859e9ab89d798dd9)
