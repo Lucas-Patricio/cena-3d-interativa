@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Three.js · Forest Road Viewer</title>
+  <style>
+    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+    :root {
+      --bg: #0d1a0d;
+      --panel-bg: rgba(8, 16, 8, 0.88);
+      --border: rgba(255,255,255,0.08);
+      --accent: #7ecb5f;
+      --accent-glow: rgba(126,203,95,0.28);
+      --text-primary: #e8f0e0;
+      --text-muted: #5a6e52;
+      --font-mono: 'Space Mono', monospace;
+    }
+
+    @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap');
+
+    html, body { width:100%; height:100%; overflow:hidden; background:var(--bg); color:var(--text-primary); font-family:var(--font-mono); }
+
+    #canvas-container { position:fixed; inset:0; z-index:0; }
+    #canvas-container canvas { display:block; width:100%!important; height:100%!important; }
+
+    /* Loading */
+    #loading-overlay {
+      position:fixed; inset:0; z-index:100;
+      display:flex; flex-direction:column; align-items:center; justify-content:center;
+      background:var(--bg); transition:opacity 0.9s ease, visibility 0.9s ease;
+    }
+    #loading-overlay.hidden { opacity:0; visibility:hidden; pointer-events:none; }
+    .loader-ring {
+      width:56px; height:56px;
+      border:2px solid var(--border); border-top-color:var(--accent);
+      border-radius:50%; animation:spin 1s linear infinite;
+      margin-bottom:20px; box-shadow:0 0 28px var(--accent-glow);
+    }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .loader-label   { font-size:10px; letter-spacing:.2em; text-transform:uppercase; color:var(--text-muted); }
+    .loader-progress{ margin-top:10px; font-size:20px; font-weight:700; color:var(--accent); text-shadow:0 0 20px var(--accent-glow); }
+
+    /* Topbar */
+    #topbar {
+      position:fixed; top:0; left:0; right:0; z-index:10;
+      display:flex; align-items:center; justify-content:space-between;
+      padding:16px 24px;
+      background:linear-gradient(to bottom,rgba(8,16,8,0.9) 0%,transparent 100%);
+      pointer-events:none;
+    }
+    .topbar-title { font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; }
+    .topbar-sub   { font-size:9px; letter-spacing:.1em; color:var(--text-muted); margin-top:3px; }
+    .topbar-badge {
+      font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+      color:var(--accent); border:1px solid var(--accent);
+      padding:4px 10px; border-radius:2px;
+      box-shadow:0 0 12px var(--accent-glow);
+      pointer-events:auto; text-decoration:none;
+    }
+
+    /* Info panel */
+    #info-panel {
+      position:fixed; top:80px; right:22px; z-index:10;
+      background:var(--panel-bg); border:1px solid var(--border);
+      border-radius:3px; padding:14px 18px;
+      backdrop-filter:blur(16px); min-width:180px;
+    }
+    .info-row { display:flex; justify-content:space-between; gap:14px; margin-bottom:7px; }
+    .info-row:last-child { margin-bottom:0; }
+    .info-key { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-muted); }
+    .info-val { font-size:10px; font-weight:700; color:var(--text-primary); }
+    .divider  { height:1px; background:var(--border); margin:9px 0; }
+
+    /* Controls panel */
+    #controls-panel {
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:10;
+      background:var(--panel-bg); border:1px solid var(--border);
+      border-radius:3px; padding:12px 24px;
+      display:flex; gap:28px; backdrop-filter:blur(16px);
+    }
+    .ctrl-item { display:flex; flex-direction:column; align-items:center; gap:5px; }
+    .ctrl-icon  { font-size:15px; opacity:.7; }
+    .ctrl-label { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--text-muted); }
+
+    /* FPS overlay */
+    #fps-enter-overlay {
+      display:none; position:fixed; inset:0; z-index:50;
+      align-items:center; justify-content:center;
+      background:rgba(8,16,8,0.82); backdrop-filter:blur(8px);
+    }
+    .fps-card { text-align:center; border:1px solid var(--border); padding:36px 52px; border-radius:3px; background:var(--panel-bg); }
+    .fps-card h2  { font-size:20px; font-weight:700; color:var(--accent); margin-bottom:10px; letter-spacing:.1em; }
+    .fps-card p   { font-size:10px; letter-spacing:.14em; color:var(--text-muted); margin-bottom:22px; }
+    .fps-card .keys { font-size:12px; color:var(--text-primary); line-height:2.2; }
+
+    /* Error */
+    #error-msg {
+      position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+      z-index:200; background:var(--panel-bg);
+      border:1px solid rgba(255,80,80,.3); border-radius:3px;
+      padding:28px 36px; text-align:center; display:none;
+      backdrop-filter:blur(16px); max-width:420px;
+    }
+    #error-msg h3 { font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:#ff6060; margin-bottom:10px; }
+    #error-msg p  { font-size:13px; color:var(--text-muted); line-height:1.6; }
+    #error-msg code { display:block; margin-top:10px; font-size:11px; color:var(--accent); word-break:break-all; }
+  </style>
+</head>
+<body>
+
+  <div id="loading-overlay">
+    <div class="loader-ring"></div>
+    <div class="loader-label">Carregando floresta</div>
+    <div class="loader-progress" id="loader-progress">0%</div>
+  </div>
+
+  <div id="error-msg">
+    <h3>⚠ Modelo não encontrado</h3>
+    <p>Coloque o arquivo <strong>scene.glb</strong> na pasta <code>models/</code> e use um servidor HTTP.</p>
+    <code>npx serve .</code>
+  </div>
+
+  <div id="canvas-container"></div>
+
+  <div id="topbar">
+    <div>
+      <div class="topbar-title" id="model-name">Forest Road Viewer</div>
+      <div class="topbar-sub">Three.js · Sketchfab</div>
+    </div>
+    <a class="topbar-badge" href="https://sketchfab.com" target="_blank" rel="noopener">Sketchfab ↗</a>
+  </div>
+
+  <div id="info-panel">
+    <div class="info-row"><span class="info-key">FPS</span><span class="info-val" id="info-fps">—</span></div>
+    <div class="info-row"><span class="info-key">Triângulos</span><span class="info-val" id="info-tris">—</span></div>
+    <div class="divider"></div>
+    <div class="info-row"><span class="info-key">Renderer</span><span class="info-val">WebGL 2</span></div>
+    <div class="info-row"><span class="info-key">Lib</span><span class="info-val">Three r128</span></div>
+  </div>
+
+  <div id="controls-panel">
+    <div class="ctrl-item" id="hint-orbit"><span class="ctrl-icon">🖱️</span><span class="ctrl-label">Arrastar · Rotacionar</span></div>
+    <div class="ctrl-item" id="hint-zoom"><span class="ctrl-icon">⚙️</span><span class="ctrl-label">Scroll · Zoom</span></div>
+    <div class="ctrl-item" id="hint-pan"><span class="ctrl-icon">✋</span><span class="ctrl-label">Btn dir · Pan</span></div>
+    <div class="ctrl-item" id="hint-fps-wasd"  style="display:none"><span class="ctrl-icon">⌨️</span><span class="ctrl-label">WASD · Mover</span></div>
+    <div class="ctrl-item" id="hint-fps-mouse" style="display:none"><span class="ctrl-icon">🖱️</span><span class="ctrl-label">Mouse · Olhar</span></div>
+    <div class="ctrl-item" id="hint-fps-esc"   style="display:none"><span class="ctrl-icon">⎋</span><span class="ctrl-label">ESC · Sair</span></div>
+    <div class="ctrl-item" id="btn-toggle-mode" style="border-left:1px solid var(--border);padding-left:22px;cursor:pointer">
+      <span class="ctrl-icon" id="mode-icon">🎮</span>
+      <span class="ctrl-label" id="mode-label">Modo FPS [F]</span>
+    </div>
+  </div>
+
+  <div id="fps-enter-overlay">
+    <div class="fps-card">
+      <h2>MODO FPS</h2>
+      <p>CLIQUE PARA CAPTURAR O MOUSE</p>
+      <div class="keys">
+        <b>WASD</b> — mover &nbsp;|&nbsp; <b>Mouse</b> — olhar<br>
+        <b>ESC</b> — liberar &nbsp;|&nbsp; <b>F</b> — voltar à órbita
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+
+  <script>
+    'use strict';
+
+    // ─────────────────────────────────────────────
+    //  CONFIG
+    // ─────────────────────────────────────────────
+    const CONFIG = {
+      modelPath:       'models/scene.glb',
+      cameraFov:       50,
+      cameraNear:      0.01,
+      cameraFar:       500,
+      autoRotate:      true,
+      autoRotateSpeed: 0.4,
+      FPS_SPEED:       0.07,
+    };
+
+    // ─────────────────────────────────────────────
+    //  RENDERER
+    // ─────────────────────────────────────────────
+    const container = document.getElementById('canvas-container');
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputEncoding          = THREE.sRGBEncoding;
+    renderer.shadowMap.enabled       = true;
+    renderer.shadowMap.type          = THREE.PCFSoftShadowMap;
+    renderer.toneMapping             = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure     = 1.1;
+    renderer.physicallyCorrectLights = true;
+    container.appendChild(renderer.domElement);
+
+    // ─────────────────────────────────────────────
+    //  CENA
+    // ─────────────────────────────────────────────
+    const scene = new THREE.Scene();
+
+    // Cor do céu — azul de dia com leve neblina de floresta
+    const SKY_COLOR  = new THREE.Color(0x87ceeb);
+    const HAZE_COLOR = new THREE.Color(0xc8e8c0);
+    scene.background = SKY_COLOR;
+    scene.fog = new THREE.FogExp2(0xb8d8b0, 0.022); // névoa exponencial de floresta
+
+    // ─────────────────────────────────────────────
+    //  CÂMERA
+    // ─────────────────────────────────────────────
+    const camera = new THREE.PerspectiveCamera(
+      CONFIG.cameraFov,
+      window.innerWidth / window.innerHeight,
+      CONFIG.cameraNear,
+      CONFIG.cameraFar
+    );
+    camera.position.set(4, 2, 5);
+
+    // ─────────────────────────────────────────────
+    //  ENV MAP — céu de dia para reflexos no carro
+    // ─────────────────────────────────────────────
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+
+    function buildDaylightEnvMap() {
+      const envScene = new THREE.Scene();
+      // Sol forte de cima
+      const sun = new THREE.DirectionalLight(0xfff5c0, 12);
+      sun.position.set(6, 10, 4);
+      envScene.add(sun);
+      // Céu azul (topo)
+      const sky = new THREE.HemisphereLight(0x87ceeb, 0x3a7a3a, 3);
+      envScene.add(sky);
+      // Luz verde refletida do chão da floresta
+      const groundBounce = new THREE.PointLight(0x88cc44, 2, 30);
+      groundBounce.position.set(0, -2, 0);
+      envScene.add(groundBounce);
+      return pmremGenerator.fromScene(envScene).texture;
+    }
+
+    const envTexture  = buildDaylightEnvMap();
+    scene.environment = envTexture;
+
+    // ─────────────────────────────────────────────
+    //  ESTRADA DE FLORESTA
+    // ─────────────────────────────────────────────
+
+    /** Chão da floresta — terra e grama */
+    const groundMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(80, 80, 1, 1),
+      new THREE.MeshStandardMaterial({
+        color:     0x2d5a1b,
+        roughness: 0.95,
+        metalness: 0.0,
+      })
+    );
+    groundMesh.rotation.x   = -Math.PI / 2;
+    groundMesh.position.y   = 0;
+    groundMesh.receiveShadow = true;
+    scene.add(groundMesh);
+
+    /** Asfalto — faixa de estrada comprida */
+    const roadMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.5, 80),
+      new THREE.MeshStandardMaterial({
+        color:     0x1a1a1a,
+        roughness: 0.82,
+        metalness: 0.05,
+      })
+    );
+    roadMesh.rotation.x    = -Math.PI / 2;
+    roadMesh.position.y    = 0.02;   // acima do chão de grama
+    roadMesh.receiveShadow = true;
+    scene.add(roadMesh);
+
+    /**
+     * Faixas amarelas — ficam acima do asfalto com gap generoso
+     * para evitar z-fighting com a sombra projetada no asfalto.
+     * renderOrder garante que são desenhadas depois do asfalto.
+     */
+    const lineMat = new THREE.MeshStandardMaterial({
+      color:        0xf5d742,
+      roughness:    0.75,
+      polygonOffset: true,       // empurra a faixa para a frente na GPU
+      polygonOffsetFactor: -1,   // afasta do plano de sombra
+      polygonOffsetUnits:  -1,
+    });
+    for (let z = -36; z <= 36; z += 5) {
+      const line = new THREE.Mesh(new THREE.PlaneGeometry(0.12, 2.5), lineMat);
+      line.rotation.x    = -Math.PI / 2;
+      line.position.set(0, 0.025, z);  // 0.005 acima do asfalto
+      line.receiveShadow = true;
+      line.renderOrder   = 1;
+      scene.add(line);
+    }
+
+    /** Acostamento — faixa de terra batida nas bordas */
+    const shoulderMat = new THREE.MeshStandardMaterial({ color:0x8b7355, roughness:1.0 });
+    [-3.2, 3.2].forEach((x) => {
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 80), shoulderMat);
+      s.rotation.x   = -Math.PI / 2;
+      s.position.set(x, 0.01, 0);   // entre grama e asfalto
+      s.receiveShadow = true;
+      scene.add(s);
+    });
+
+    // ─────────────────────────────────────────────
+    //  ÁRVORES PROCEDURAIS
+    // ─────────────────────────────────────────────
+    const trunkMat  = new THREE.MeshStandardMaterial({ color:0x4a2f1a, roughness:0.95 });
+    const leavesMat = new THREE.MeshStandardMaterial({ color:0x2d6e1f, roughness:0.85 });
+    const leavesMatDark = new THREE.MeshStandardMaterial({ color:0x1e4f14, roughness:0.9 });
+
+    /**
+     * Cria uma árvore simples (tronco cilíndrico + copa cônica)
+     * e a posiciona em (x, 0, z).
+     */
+    function spawnTree(x, z, scale) {
+      const group = new THREE.Group();
+
+      // Tronco
+      const trunk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.08 * scale, 0.13 * scale, 1.4 * scale, 7),
+        trunkMat
+      );
+      trunk.position.y   = 0.7 * scale;
+      trunk.castShadow   = true;
+      trunk.receiveShadow = true;
+      group.add(trunk);
+
+      // Copa — três cones sobrepostos para parecer mais densa
+      const coneHeights = [1.8, 1.4, 1.0];
+      const coneOffsets = [0.0, 0.7, 1.3];
+      const mats        = [leavesMat, leavesMatDark, leavesMat];
+
+      coneHeights.forEach((h, i) => {
+        const cone = new THREE.Mesh(
+          new THREE.ConeGeometry(0.7 * scale * (1 - i * 0.15), h * scale, 8),
+          mats[i]
+        );
+        cone.position.y   = (1.4 + coneOffsets[i] * scale + h * scale * 0.5);
+        cone.castShadow   = true;
+        cone.receiveShadow = true;
+        group.add(cone);
+      });
+
+      group.position.set(x, 0, z);
+      // Rotação aleatória determinística para variar sem Math.random
+      group.rotation.y = (x * 13.7 + z * 7.3) % (Math.PI * 2);
+      scene.add(group);
+    }
+
+    // Linha de árvores dos dois lados da estrada
+    const treePositions = [
+      // Lado esquerdo (x negativo)
+      { x: -5,  z: -30, s: 1.3 }, { x: -6,  z: -20, s: 1.1 },
+      { x: -4.5,z: -10, s: 1.4 }, { x: -6,  z:   0, s: 1.2 },
+      { x: -5,  z:  10, s: 1.0 }, { x: -6.5,z:  20, s: 1.3 },
+      { x: -5,  z:  30, s: 1.1 }, { x: -8,  z: -25, s: 1.5 },
+      { x: -9,  z:  -5, s: 1.2 }, { x: -8,  z:  15, s: 1.4 },
+      { x: -10, z: -15, s: 1.6 }, { x: -11, z:  25, s: 1.3 },
+      // Lado direito (x positivo)
+      { x:  5,  z: -28, s: 1.2 }, { x:  6,  z: -18, s: 1.4 },
+      { x:  5,  z:  -8, s: 1.1 }, { x:  6,  z:   2, s: 1.3 },
+      { x:  5,  z:  12, s: 1.0 }, { x:  6.5,z:  22, s: 1.2 },
+      { x:  5,  z:  32, s: 1.4 }, { x:  8,  z: -22, s: 1.5 },
+      { x:  9,  z:   8, s: 1.1 }, { x:  8,  z:  18, s: 1.3 },
+      { x: 10,  z: -12, s: 1.6 }, { x: 11,  z:  28, s: 1.2 },
+    ];
+    treePositions.forEach(({ x, z, s }) => spawnTree(x, z, s));
+
+    // ─────────────────────────────────────────────
+    //  LUZES — CENA DE DIA NA FLORESTA
+    // ─────────────────────────────────────────────
+
+    /**
+     * Luz ambiente — simula o céu difuso (azul claro)
+     */
+    const ambientLight = new THREE.AmbientLight(0x88bbff, 0.7);
+    scene.add(ambientLight);
+
+    /**
+     * HemisphereLight — céu azul acima, verde da floresta abaixo.
+     * Dá aquele tom natural de dia em floresta.
+     */
+    const hemiLight = new THREE.HemisphereLight(
+      0x87ceeb,  // cor do céu
+      0x3a7a2a,  // cor refletida pelo chão verde
+      1.4
+    );
+    scene.add(hemiLight);
+
+    /**
+     * DirectionalLight — SOL.
+     * Posicionado alto e ligeiramente à frente para criar
+     * reflexo direto no capô e sombra longa na estrada.
+     */
+    const sunLight = new THREE.DirectionalLight(0xfff5b0, 4.5);
+    sunLight.position.set(5, 12, 6);
+    sunLight.target.position.set(0, 0, 0);
+    sunLight.castShadow              = true;
+    sunLight.shadow.mapSize.set(4096, 4096);
+    sunLight.shadow.camera.near      = 0.5;
+    sunLight.shadow.camera.far       = 60;
+    sunLight.shadow.camera.left      = -15;
+    sunLight.shadow.camera.right     =  15;
+    sunLight.shadow.camera.top       =  15;
+    sunLight.shadow.camera.bottom    = -15;
+    sunLight.shadow.bias             = -0.003;
+    sunLight.shadow.normalBias       =  0.02;
+    scene.add(sunLight);
+    scene.add(sunLight.target);
+
+    /**
+     * Luz de preenchimento vinda de baixo/lateral —
+     * simula luz que reflete do asfalto e da grama.
+     */
+    const bounceFill = new THREE.DirectionalLight(0xaacc88, 0.6);
+    bounceFill.position.set(-4, 1, -3);
+    scene.add(bounceFill);
+
+    // ─────────────────────────────────────────────
+    //  ORBIT CONTROLS
+    // ─────────────────────────────────────────────
+    const orbitControls = new THREE.OrbitControls(camera, renderer.domElement);
+    orbitControls.enableDamping   = true;
+    orbitControls.dampingFactor   = 0.07;
+    orbitControls.autoRotate      = CONFIG.autoRotate;
+    orbitControls.autoRotateSpeed = CONFIG.autoRotateSpeed;
+    orbitControls.minDistance     = 0.5;
+    orbitControls.maxDistance     = 30;
+    orbitControls.maxPolarAngle   = Math.PI * 0.84;
+    orbitControls.enablePan       = true;
+    orbitControls.panSpeed        = 0.7;
+    orbitControls.rotateSpeed     = 0.7;
+    orbitControls.zoomSpeed       = 1.0;
+    orbitControls.addEventListener('start', () => { orbitControls.autoRotate = false; });
+
+    // ─────────────────────────────────────────────
+    //  POINTER LOCK CONTROLS (FPS)
+    // ─────────────────────────────────────────────
+    const fpsControls = new THREE.PointerLockControls(camera, renderer.domElement);
+    scene.add(fpsControls.getObject());
+
+    const keysPressed = { w:false, a:false, s:false, d:false };
+
+    // ─────────────────────────────────────────────
+    //  GERENCIADOR DE MODO ORBIT ↔ FPS
+    // ─────────────────────────────────────────────
+    let currentMode = 'orbit';
+
+    const fpsOverlay   = document.getElementById('fps-enter-overlay');
+    const btnToggle    = document.getElementById('btn-toggle-mode');
+    const modeIcon     = document.getElementById('mode-icon');
+    const modeLabel    = document.getElementById('mode-label');
+    const hintOrbit    = document.getElementById('hint-orbit');
+    const hintZoom     = document.getElementById('hint-zoom');
+    const hintPan      = document.getElementById('hint-pan');
+    const hintFpsWasd  = document.getElementById('hint-fps-wasd');
+    const hintFpsMouse = document.getElementById('hint-fps-mouse');
+    const hintFpsEsc   = document.getElementById('hint-fps-esc');
+
+    function enterFpsMode() {
+      currentMode = 'fps';
+      orbitControls.enabled = false;
+      fpsOverlay.style.display = 'flex';
+      modeIcon.textContent  = '🔭';
+      modeLabel.textContent = 'Modo Órbita [F]';
+      hintOrbit.style.display = hintZoom.style.display = hintPan.style.display = 'none';
+      hintFpsWasd.style.display = hintFpsMouse.style.display = hintFpsEsc.style.display = 'flex';
+    }
+
+    function enterOrbitMode() {
+      currentMode = 'orbit';
+      if (fpsControls.isLocked) fpsControls.unlock();
+      orbitControls.enabled = true;
+      fpsOverlay.style.display = 'none';
+      modeIcon.textContent  = '🎮';
+      modeLabel.textContent = 'Modo FPS [F]';
+      hintOrbit.style.display = hintZoom.style.display = hintPan.style.display = 'flex';
+      hintFpsWasd.style.display = hintFpsMouse.style.display = hintFpsEsc.style.display = 'none';
+      Object.keys(keysPressed).forEach(k => keysPressed[k] = false);
+    }
+
+    fpsOverlay.addEventListener('click', () => fpsControls.lock());
+    btnToggle.addEventListener('click',  () => currentMode === 'orbit' ? enterFpsMode() : enterOrbitMode());
+
+    fpsControls.addEventListener('lock',   () => { fpsOverlay.style.display = 'none'; });
+    fpsControls.addEventListener('unlock', () => { if (currentMode === 'fps') fpsOverlay.style.display = 'flex'; });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'KeyF') { currentMode === 'orbit' ? enterFpsMode() : enterOrbitMode(); }
+      if (e.code === 'KeyW') keysPressed.w = true;
+      if (e.code === 'KeyA') keysPressed.a = true;
+      if (e.code === 'KeyS') keysPressed.s = true;
+      if (e.code === 'KeyD') keysPressed.d = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'KeyW') keysPressed.w = false;
+      if (e.code === 'KeyA') keysPressed.a = false;
+      if (e.code === 'KeyS') keysPressed.s = false;
+      if (e.code === 'KeyD') keysPressed.d = false;
+    });
+
+    // ─────────────────────────────────────────────
+    //  CARREGAMENTO DO MODELO GLTF
+    // ─────────────────────────────────────────────
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loaderProgress = document.getElementById('loader-progress');
+    const errorMsg       = document.getElementById('error-msg');
+    const infoTris       = document.getElementById('info-tris');
+
+    const gltfLoader = new THREE.GLTFLoader();
+
+    gltfLoader.load(
+      CONFIG.modelPath,
+
+      (gltf) => {
+        const model = gltf.scene;
+
+        // Habilita sombras e injeta envMap de dia nos materiais PBR
+        model.traverse((node) => {
+          if (node.isMesh) {
+            node.castShadow    = true;
+            node.receiveShadow = true;
+
+            const mats = Array.isArray(node.material) ? node.material : [node.material];
+            mats.forEach((mat) => {
+              if (mat.isMeshStandardMaterial || mat.isMeshPhysicalMaterial) {
+                mat.envMap          = envTexture; // reflexo do céu e da floresta no carro
+                mat.envMapIntensity = 1.4;
+                mat.needsUpdate     = true;
+              }
+            });
+          }
+        });
+
+        scene.add(model);
+        fitModelToView(model);
+
+        // Contagem de triângulos
+        let totalTris = 0;
+        model.traverse((node) => {
+          if (node.isMesh && node.geometry) {
+            const geo = node.geometry;
+            totalTris += geo.index
+              ? geo.index.count / 3
+              : (geo.attributes.position?.count ?? 0) / 3;
+          }
+        });
+        infoTris.textContent = Math.round(totalTris).toLocaleString('pt-BR');
+
+        loadingOverlay.classList.add('hidden');
+      },
+
+      (xhr) => {
+        if (xhr.lengthComputable) {
+          loaderProgress.textContent = Math.round((xhr.loaded / xhr.total) * 100) + '%';
+        }
+      },
+
+      (error) => {
+        console.error('[GLTFLoader]', error);
+        loadingOverlay.classList.add('hidden');
+        errorMsg.style.display = 'block';
+      }
+    );
+
+    /**
+     * Centraliza o modelo na estrada, assenta no asfalto
+     * e enquadra câmera + sol automaticamente.
+     */
+    function fitModelToView(model) {
+      const box    = new THREE.Box3().setFromObject(model);
+      const center = new THREE.Vector3();
+      const size   = new THREE.Vector3();
+      box.getCenter(center);
+      box.getSize(size);
+
+      const maxDim      = Math.max(size.x, size.y, size.z);
+      const scaleFactor = 2.2 / maxDim;
+
+      model.position.sub(center);
+      model.scale.setScalar(scaleFactor);
+
+      // Assenta no chão (y mín = 0 → em cima do asfalto)
+      const newBox = new THREE.Box3().setFromObject(model);
+      model.position.y -= newBox.min.y - 0.01;
+
+      // Atualiza o sol para ficar bem acima do carro escalado
+      const scaledBox  = new THREE.Box3().setFromObject(model);
+      const scaledSize = new THREE.Vector3();
+      scaledBox.getSize(scaledSize);
+
+      sunLight.position.set(
+        scaledSize.x * 2.5,
+        scaledSize.y * 5.0 + 4,
+        scaledSize.z * 2.0
+      );
+      sunLight.shadow.camera.left   = -scaledSize.length() * 2;
+      sunLight.shadow.camera.right  =  scaledSize.length() * 2;
+      sunLight.shadow.camera.top    =  scaledSize.length() * 2;
+      sunLight.shadow.camera.bottom = -scaledSize.length() * 2;
+      sunLight.shadow.camera.updateProjectionMatrix();
+
+      // Enquadra câmera lateral ao carro
+      const fitDist = scaledSize.length() * 1.4;
+      camera.position.set(fitDist * 0.6, fitDist * 0.35, fitDist * 0.8);
+      camera.lookAt(0, scaledSize.y * 0.45, 0);
+
+      orbitControls.target.set(0, scaledSize.y * 0.45, 0);
+      orbitControls.minDistance = scaledSize.length() * 0.25;
+      orbitControls.maxDistance = scaledSize.length() * 8;
+      orbitControls.update();
+    }
+
+    // ─────────────────────────────────────────────
+    //  RESIZE HANDLER
+    // ─────────────────────────────────────────────
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    }
+    window.addEventListener('resize', onWindowResize);
+
+    // ─────────────────────────────────────────────
+    //  LOOP DE ANIMAÇÃO (requestAnimationFrame)
+    // ─────────────────────────────────────────────
+    let frameCount  = 0;
+    let lastFpsTime = performance.now();
+    const infoFps   = document.getElementById('info-fps');
+
+    function animationLoop() {
+      requestAnimationFrame(animationLoop);
+
+      if (currentMode === 'orbit') {
+        orbitControls.update();
+      } else if (currentMode === 'fps' && fpsControls.isLocked) {
+        if (keysPressed.w) fpsControls.moveForward( CONFIG.FPS_SPEED);
+        if (keysPressed.s) fpsControls.moveForward(-CONFIG.FPS_SPEED);
+        if (keysPressed.a) fpsControls.moveRight(-CONFIG.FPS_SPEED);
+        if (keysPressed.d) fpsControls.moveRight( CONFIG.FPS_SPEED);
+      }
+
+      renderer.render(scene, camera);
+
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsTime >= 1000) {
+        infoFps.textContent = frameCount;
+        frameCount  = 0;
+        lastFpsTime = now;
+      }
+    }
+
+    animationLoop();
+  </script>
+</body>
+</html>
